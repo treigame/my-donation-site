@@ -9,59 +9,63 @@ type OmikujiResult = {
 };
 
 export default function Home() {
-  // PayPayエラー回避のため、初期値を「500円」に設定
-  const [amount, setAmount] = useState<string>("500");
+  // 1円から決済できるように初期値を「1」に設定
+  const [amount, setAmount] = useState<string>("1");
   const [loading, setLoading] = useState<boolean>(false);
   const [fortuneText, setFortuneText] = useState<OmikujiResult | null>(null);
   const [isPaperVisible, setIsPaperVisible] = useState<boolean>(false);
   const [isOpened, setIsOpened] = useState<boolean>(false);
 
-  // おみくじの確率計算
+  // おみくじの選択肢を4つに絞り、指定された確率に設定
   const drawOmikuji = (): OmikujiResult => {
     const rand = Math.random() * 100;
 
-    if (rand < 3) return { fortune: "終わり", description: "すべてがリセットされる時。新たな始まりかも？", color: "#4a5568" };
-    if (rand < 3 + 5) return { fortune: "大凶", description: "これ以上下がることはない！あとは上がるだけ！", color: "#e53e3e" };
-    if (rand < 3 + 5 + 7) return { fortune: "凶", description: "忘れ物に注意。慎重に行動すれば難を逃れます。", color: "#dd6b20" };
-    if (rand < 3 + 5 + 7 + 15) return { fortune: "末吉", description: "じわじわと運気が良くなる、伸びしろ抜群の運勢！", color: "#3182ce" };
-    if (rand < 3 + 5 + 7 + 15 + 25) return { fortune: "吉", description: "なかなかに良い運気。日常の小さな幸せを楽しんで。", color: "#38a169" };
-    if (rand < 3 + 5 + 7 + 15 + 25 + 20) return { fortune: "中吉", description: "結構いい感じ！友達と遊ぶとさらに運気アップ！", color: "#319795" };
-    if (rand < 3 + 5 + 7 + 15 + 25 + 20 + 15) return { fortune: "大吉", description: "最高の一日！やりたいことに全力で挑戦しよう！", color: "#e53e3e" };
-    return { fortune: "運良すぎ！", description: "奇跡の確率を引き当てました！今日のアナタは無敵です！", color: "#d69e2e" };
+    if (rand < 3) {
+      return { fortune: "終わり", description: "すべてがリセットされる時。新たな始まりかも？", color: "#4a5568" };
+    }
+    if (rand < 3 + 5) {
+      return { fortune: "大凶", description: "これ以上下がることはない！あとは上がるだけ！", color: "#e53e3e" };
+    }
+    if (rand < 3 + 5 + 7) {
+      return { fortune: "凶", description: "忘れ物に注意。慎重に行動すれば難を逃れます。", color: "#dd6b20" };
+    }
+    // 残りの85%（15+25+20+15+5）をすべてひとつの「強運」に統合
+    return { fortune: "大吉・運良すぎ！", description: "驚異の強運！今日のアナタの願いはすべて叶うでしょう！", color: "#d69e2e" };
   };
 
   const handlePayPayCheckout = async () => {
-    // 100円未満だとPayPay側がエラーを吐くためのガード
-    if (Number(amount) < 100) {
-      alert("PayPayのテスト仕様上、お賽銭は100円以上で入力してください！");
+    if (!amount || Number(amount) <= 0) {
+      alert("お賽銭の金額を1円以上で入力してください！");
       return;
     }
 
     setLoading(true);
     try {
+      // 数値として確実に送信する
+      const sendAmount = Math.floor(Number(amount));
+
       const res = await fetch("/api/paypay/create-qr", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: Number(amount) }),
+        body: JSON.stringify({ amount: sendAmount }),
       });
       
       const data = await res.json();
-      console.log("PayPay Response Data:", data); // ブラウザのF12コンソールでエラーの正体を見れるようにする
+      console.log("PayPay Response Data:", data);
       
       if (data.url) {
         window.location.href = data.url;
       } else {
-        alert(`QRコードの作成に失敗しました。\n理由: ${data.error || "不明なエラー"}\n※お賽銭の金額を300円や500円に変えて試してみてください。`);
+        alert(`QRコードの作成に失敗しました。\n理由: ${data.error || "不明なエラー"}\n※原因を調べるため、F12キーを押してコンソールログを確認してください。`);
       }
     } catch (err) {
       console.error("Fetch Error:", err);
-      alert("通信エラーが発生しました。サーバーの環境変数（キー）がVercelに入っているか確認してください。");
+      alert("通信エラーが発生しました。");
     } finally {
       setLoading(false);
     }
   };
 
-  // テスト用ボタンの処理
   const simulateSuccess = () => {
     setFortuneText(drawOmikuji());
     setIsPaperVisible(true);
@@ -71,25 +75,23 @@ export default function Home() {
   return (
     <main 
       className="relative min-h-screen w-full flex flex-col items-center justify-between bg-cover bg-center overflow-hidden" 
-      style={{ backgroundImage: "url('https://japaclip.com/files/shrine.png')" }} // 直接外部URLから読み込み
+      style={{ backgroundImage: "url('https://japaclip.com/files/shrine.png')" }}
     >
-      
-      {/* 遮光オーバーレイ（神社を背景として文字を読みやすくする） */}
       <div className="absolute inset-0 bg-black/40 pointer-events-none" />
 
       {/* 上部：金額設定 */}
       <div className="relative z-10 mt-8 bg-white/95 p-5 rounded-xl shadow-2xl border-2 border-red-600 text-center max-w-xs w-full mx-4">
         <h1 className="text-xl font-black text-red-700 mb-1 tracking-wider">⛩️ インターネット神社</h1>
-        <p className="text-[10px] text-gray-400 font-mono mb-3">Cyber Shrine System v1.0</p>
+        <p className="text-[10px] text-gray-400 font-mono mb-3">Cyber Shrine System v1.1</p>
         
-        <label className="block text-xs text-gray-600 mb-1">お賽銭の金額 (100円以上)</label>
+        <label className="block text-xs text-gray-600 mb-1">お賽銭の金額 (1円以上)</label>
         <div className="relative flex items-center justify-center">
           <input
             type="number"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             className="w-full text-center text-3xl font-black border-2 border-red-200 rounded p-1 mb-2 text-black bg-amber-50/50"
-            min="100"
+            min="1"
           />
           <span className="absolute right-4 bottom-4 font-bold text-gray-500">円</span>
         </div>
@@ -104,7 +106,7 @@ export default function Home() {
         </button>
       </div>
 
-      {/* 中央〜下部：お賽銭箱タッチエリア */}
+      {/* 中央：お賽銭箱 */}
       <div className="relative z-10 mb-20 flex flex-col items-center w-full">
         <button
           onClick={handlePayPayCheckout}
@@ -121,7 +123,7 @@ export default function Home() {
         </button>
       </div>
 
-      {/* 📜 右から左へシャッと出るおみくじ */}
+      {/* 右から出るおみくじの紙 */}
       <div
         className={`fixed top-1/2 -translate-y-1/2 right-0 z-50 transition-all duration-700 ease-out flex items-center ${
           isPaperVisible ? "translate-x-[-30px]" : "translate-x-full"
