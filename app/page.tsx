@@ -1,165 +1,152 @@
 "use client";
 
-import React, { useState } from 'react';
+import { useState } from "react";
 
-export default function DonationComponent() {
-  const [showAddFundsModal, setShowAddFundsModal] = useState(true);
-  const [addAmountInput, setAddAmountInput] = useState<string>("1000");
-  const [payPayLoading, setPayPayLoading] = useState<boolean>(false);
-  const [balance, setBalance] = useState<number>(0);
-  const [showThanks, setShowThanks] = useState<boolean>(false);
-  const [lastDonationAmount, setLastDonationAmount] = useState<number>(0);
+type OmikujiResult = {
+  fortune: string;
+  description: string;
+  color: string;
+};
 
-  // PayPay取引の状態（本物のURLを受け取る）
-  const [activePayPayTx, setActivePayPayTx] = useState<{
-    merchantPaymentId: string;
-    qrUrl: string;
-    amount: number;
-  } | null>(null);
+export default function Home() {
+  const [amount, setAmount] = useState<string>("100");
+  const [loading, setLoading] = useState<boolean>(false);
+  const [showResult, setShowResult] = useState<boolean>(false);
+  const [fortuneText, setFortuneText] = useState<OmikujiResult | null>(null);
+  const [isPaperVisible, setIsPaperVisible] = useState<boolean>(false);
+  const [isOpened, setIsOpened] = useState<boolean>(false);
 
-  const validateAmount = (amountStr: string): number | null => {
-    const amount = parseInt(amountStr, 10);
-    if (isNaN(amount) || amount < 1 || amount > 1000000) {
-      alert("⚠️ ドネーション金額は1円から最高100万円までで指定してください。");
-      return null;
-    }
-    return amount;
+  // おみくじの確率計算
+  const drawOmikuji = (): OmikujiResult => {
+    const rand = Math.random() * 100; // 0〜100の乱数
+
+    if (rand < 3) return { fortune: "終わり", description: "すべてがリセットされる時。新たな始まりかも？", color: "#4a5568" };
+    if (rand < 3 + 5) return { fortune: "大凶", description: "これ以上下がることはない！あとは上がるだけ！", color: "#e53e3e" };
+    if (rand < 3 + 5 + 7) return { fortune: "凶", description: "忘れ物に注意。慎重に行動すれば難を逃れます。", color: "#dd6b20" };
+    if (rand < 3 + 5 + 7 + 15) return { fortune: "末吉", description: "じわじわと運気が良くなる、伸びしろ抜群の運勢！", color: "#3182ce" };
+    if (rand < 3 + 5 + 7 + 15 + 25) return { fortune: "吉", description: "なかなかに良い運気。日常の小さな幸せを楽しんで。", color: "#38a169" };
+    if (rand < 3 + 5 + 7 + 15 + 25 + 20) return { fortune: "中吉", description: "結構いい感じ！友達と遊ぶとさらに運気アップ！", color: "#319795" };
+    if (rand < 3 + 5 + 7 + 15 + 25 + 20 + 15) return { fortune: "大吉", description: "最高の一日！やりたいことに全力で挑戦しよう！", color: "#e53e3e" };
+    return { fortune: "運良すぎ！", description: "奇跡の確率を引き当てました！今日のアナタは無敵です！", color: "#d69e2e" };
   };
 
-  const handleDonationSuccess = (amount: number) => {
-    setBalance(prev => prev + amount);
-    setLastDonationAmount(amount);
-    setShowAddFundsModal(false);
-    setActivePayPayTx(null);
-    setShowThanks(true);
+  const handlePayPayCheckout = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/paypay/create-qr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: Number(amount) }),
+      });
+      const data = await res.json();
+      
+      if (data.url) {
+        // PayPayテスト画面へ移動
+        window.location.href = data.url;
+        
+        // ※デモ・テスト確認用に、決済成功して戻ってきたと仮定する動作を仕込む場合：
+        // 実際にはPayPayから戻った後にこの処理を走らせるため、今回はシミュレーション用の処理
+      } else {
+        alert("QRコードの作成に失敗しました。");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("エラーが発生しました。");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // テスト用：PayPay支払い成功をスキップして、おみくじアニメーションをすぐ見たい場合用
+  const simulateSuccess = () => {
+    setFortuneText(drawOmikuji());
+    setIsPaperVisible(true);
+    setIsOpened(false);
   };
 
   return (
-    <div className="p-8 bg-slate-100 min-h-screen font-sans flex flex-col items-center justify-center text-slate-900">
+    <main className="relative min-h-screen w-full flex flex-col items-center justify-between bg-cover bg-center overflow-hidden" 
+          style={{ backgroundImage: "url('/shrine.png')" }}>
       
-      {/* 寄付総額表示パネル */}
-      <div className="max-w-md w-full bg-white p-6 rounded-2xl shadow-md text-center mb-6">
-        <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wider">これまでの寄付総額</h2>
-        <p className="text-3xl font-black text-slate-900 mt-1">¥{balance.toLocaleString()}</p>
+      {/* 遮光オーバーレイ（神社を背景として見やすくする） */}
+      <div className="absolute inset-0 bg-black/30 pointer-events-none" />
+
+      {/* 上部：金額設定 */}
+      <div className="relative z-10 mt-8 bg-white/90 p-4 rounded-xl shadow-xl border-2 border-red-500 text-center max-w-xs w-full mx-4">
+        <h1 className="text-xl font-bold text-red-700 mb-2">電子お賽銭・おみくじ</h1>
+        <label className="block text-sm text-gray-600 mb-1">お賽銭の金額 (円)</label>
+        <input
+          type="number"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          className="w-full text-center text-2xl font-bold border-2 border-gray-300 rounded p-1 mb-2 text-black"
+          min="1"
+        />
+        <p className="text-xs text-gray-500">お賽銭を入れると、おみくじが引けます</p>
         <button 
-          onClick={() => {
-            setActivePayPayTx(null); // クリアして開く
-            setShowAddFundsModal(true);
-          }}
-          className="mt-4 px-6 py-2.5 bg-[#FF0033] text-white font-bold rounded-xl shadow-md hover:bg-[#e6002e] transition-all"
+          onClick={simulateSuccess} 
+          className="mt-2 text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600 transition"
         >
-          🎁 ドネーションする
+          ⚙️ テスト：即おみくじを引く
         </button>
       </div>
 
-      {/* モーダル */}
-      {showAddFundsModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100">
+      {/* 中央〜下部：お賽銭箱タップエリア */}
+      <div className="relative z-10 mb-16 flex flex-col items-center w-full">
+        {/* お賽銭箱の当たり判定エリア（神社の画像のお賽銭箱の位置に合わせて調整） */}
+        <button
+          onClick={handlePayPayCheckout}
+          disabled={loading}
+          className="group relative w-64 h-36 bg-amber-900/40 hover:bg-amber-500/20 border-4 border-dashed border-amber-400 rounded-lg flex flex-col items-center justify-center transition-all shadow-2xl backdrop-blur-xs"
+        >
+          <span className="bg-red-600 text-white font-bold px-4 py-1 rounded shadow animate-bounce text-sm">
+            {loading ? "通信中..." : "ここをタッチしてお賽銭"}
+          </span>
+          <span className="text-amber-200 text-xs mt-2 font-semibold tracking-wider group-hover:scale-110 transition-transform">
+            💸 PayPayでお支払い
+          </span>
+        </button>
+      </div>
+
+      {/* ⛩️ 右から左へシャッと出る「おみくじの紙」のアニメーション */}
+      <div
+        className={`fixed top-1/2 -translate-y-1/2 right-0 z-50 transition-all duration-700 ease-out flex items-center ${
+          isPaperVisible ? "translate-x-[-20px]" : "translate-x-full"
+        }`}
+      >
+        {!isOpened ? (
+          // タップする前の紐で縛られたおみくじの紙
+          <button
+            onClick={() => setIsOpened(true)}
+            className="bg-[#fcf8f2] border-2 border-amber-800 text-amber-900 px-4 py-12 font-bold rounded shadow-2xl cursor-pointer hover:bg-amber-50 active:scale-95 transition-all text-xl tracking-widest [writing-mode:vertical-rl] animate-pulse"
+          >
+            📜 おみくじを開く (タップ)
+          </button>
+        ) : (
+          // タップして開いた結果画面
+          <div className="bg-[#fcf8f2] border-4 double border-amber-900 p-6 rounded-lg shadow-2xl max-w-sm w-80 text-black flex flex-col items-center text-center relative border-double">
+            <h2 className="text-gray-500 text-sm font-bold tracking-widest mb-1">武蔵野電子神社</h2>
+            <div className="w-full h-px bg-amber-800 my-2" />
             
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-extrabold text-lg flex items-center gap-2">
-                <span>💝 ドネーション金額の入力</span>
-              </h3>
-              <button onClick={() => setShowAddFundsModal(false)} className="text-slate-400 hover:text-slate-600 font-mono text-sm">[閉じる]</button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block mb-1">寄付金額 (1円 〜 1,000,000円)</label>
-                <div className="relative flex items-center">
-                  <span className="absolute left-3 font-bold text-slate-400 text-sm">¥</span>
-                  <input
-                    type="number"
-                    value={addAmountInput}
-                    onChange={(e) => setAddAmountInput(e.target.value)}
-                    className="w-full text-slate-800 text-sm font-semibold rounded-xl border border-slate-200 pl-7 pr-2.5 p-2.5 outline-none focus:border-[#FF0033]"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2.5 pt-2">
-                <button
-                  type="button"
-                  disabled={payPayLoading}
-                  onClick={async () => {
-                    const verifiedAmount = validateAmount(addAmountInput);
-                    if (!verifiedAmount) return;
-
-                    setPayPayLoading(true);
-                    try {
-                      const res = await fetch('/api/paypay/create-qr', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ amount: verifiedAmount }),
-                      });
-                      const data = await res.json();
-                      
-                      if (data.success) {
-                        // 🟢 裏側(route.ts)から返ってきた本物のデータをセット！
-                        setActivePayPayTx({
-                          merchantPaymentId: data.merchantPaymentId,
-                          qrUrl: data.qrUrl,
-                          amount: data.amount,
-                        });
-                      } else {
-                        alert(`❌ PayPayエラー: ${data.error}`);
-                      }
-                    } catch (e) {
-                      console.error(e);
-                      alert("通信エラーが発生しました。");
-                    } finally {
-                      setPayPayLoading(false);
-                    }
-                  }}
-                  className="w-full bg-[#FF0033] hover:bg-[#e6002e] disabled:opacity-50 text-white py-3.5 px-4 rounded-xl text-sm font-black tracking-wide transition-all shadow-lg"
-                >
-                  {payPayLoading ? "PayPayと通信中..." : `PayPayで本物通信を開始する`}
-                </button>
-              </div>
-
-              {/* 🔴 通信が成功したら、PayPayが発行した本物の決済ページへのボタンだけを出す！ */}
-              {activePayPayTx && (
-                <div className="mt-4 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-col items-center gap-3 text-center">
-                  <span className="font-bold text-emerald-700 text-xs">✅ PayPayとの本物通信に成功！</span>
-                  <p className="text-[11px] text-slate-600">下のボタンを押すと、PayPay公式のテスト決済画面（ログイン・QR表示）に飛びます！</p>
-                  
-                  <a
-                    href={activePayPayTx.qrUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-md transition-all text-center block"
-                  >
-                    🚀 OPEN PAYPAY CHECKOUT 画面を開く
-                  </a>
-
-                  <button
-                    onClick={() => handleDonationSuccess(activePayPayTx.amount)}
-                    className="w-full py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-[10px] font-medium transition-all"
-                  >
-                    (テスト用に強制的に支払いを完了させる)
-                  </button>
-                </div>
-              )}
-
-            </div>
+            <p className="text-xs text-gray-400 tracking-widest">あなたの運勢</p>
+            <h3 className="text-5xl font-black my-4 tracking-widest" style={{ color: fortuneText?.color }}>
+              {fortuneText?.fortune}
+            </h3>
+            
+            <div className="w-full h-px bg-amber-800 my-2" />
+            <p className="text-sm text-amber-950 font-medium leading-relaxed my-3 bg-white/60 p-3 rounded border border-amber-200">
+              {fortuneText?.description}
+            </p>
+            
+            <button
+              onClick={() => setIsPaperVisible(false)}
+              className="mt-4 w-full bg-amber-800 text-white font-bold py-2 rounded shadow hover:bg-amber-900 transition"
+            >
+              閉じる
+            </button>
           </div>
-        </div>
-      )}
-
-      {/* 感謝ポップアップ */}
-      {showThanks && (
-        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-8 shadow-2xl text-center">
-            <div className="text-4xl mb-3">🎉</div>
-            <h3 className="font-black text-2xl text-rose-600 mb-2">ありがとうございます！</h3>
-            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 mb-6">
-              <span className="text-2xl font-black text-slate-800">¥{lastDonationAmount.toLocaleString()}</span>
-            </div>
-            <button onClick={() => setShowThanks(false)} className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-6 rounded-xl text-sm">閉じる</button>
-          </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </main>
   );
 }
