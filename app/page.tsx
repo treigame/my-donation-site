@@ -16,7 +16,7 @@ export default function Home() {
   const [isPaperVisible, setIsPaperVisible] = useState<boolean>(false);
   const [isOpened, setIsOpened] = useState<boolean>(false);
 
-  // おみくじの選択肢を4つに絞り、指定された確率に設定
+  // おみくじの選択肢（ご指定の4つの確率パターン）
   const drawOmikuji = (): OmikujiResult => {
     const rand = Math.random() * 100;
 
@@ -29,7 +29,7 @@ export default function Home() {
     if (rand < 3 + 5 + 7) {
       return { fortune: "凶", description: "忘れ物に注意。慎重に行動すれば難を逃れます。", color: "#dd6b20" };
     }
-    // 残りの85%（15+25+20+15+5）をすべてひとつの「強運」に統合
+    // 残りの85%はすべて「大吉・運良すぎ！」に合算
     return { fortune: "大吉・運良すぎ！", description: "驚異の強運！今日のアナタの願いはすべて叶うでしょう！", color: "#d69e2e" };
   };
 
@@ -41,7 +41,6 @@ export default function Home() {
 
     setLoading(true);
     try {
-      // 数値として確実に送信する
       const sendAmount = Math.floor(Number(amount));
 
       const res = await fetch("/api/paypay/create-qr", {
@@ -53,10 +52,11 @@ export default function Home() {
       const data = await res.json();
       console.log("PayPay Response Data:", data);
       
-      if (data.url) {
-        window.location.href = data.url;
+      // 🔴 route.ts が返してくる「qrUrl」を正しく読み込むように修正！
+      if (data.qrUrl) {
+        window.location.href = data.qrUrl;
       } else {
-        alert(`QRコードの作成に失敗しました。\n理由: ${data.error || "不明なエラー"}\n※原因を調べるため、F12キーを押してコンソールログを確認してください。`);
+        alert(`QRコードの作成に失敗しました。\n理由: ${data.error || "不明なエラー"}`);
       }
     } catch (err) {
       console.error("Fetch Error:", err);
@@ -82,7 +82,7 @@ export default function Home() {
       {/* 上部：金額設定 */}
       <div className="relative z-10 mt-8 bg-white/95 p-5 rounded-xl shadow-2xl border-2 border-red-600 text-center max-w-xs w-full mx-4">
         <h1 className="text-xl font-black text-red-700 mb-1 tracking-wider">⛩️ インターネット神社</h1>
-        <p className="text-[10px] text-gray-400 font-mono mb-3">Cyber Shrine System v1.1</p>
+        <p className="text-[10px] text-gray-400 font-mono mb-3">Cyber Shrine System v1.2</p>
         
         <label className="block text-xs text-gray-600 mb-1">お賽銭の金額 (1円以上)</label>
         <div className="relative flex items-center justify-center">
