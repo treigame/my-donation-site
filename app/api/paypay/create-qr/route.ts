@@ -17,7 +17,8 @@ export async function POST(request: Request) {
     const amount = body.amount;
 
     // れいさんの本物のキーとID（そのまま引き継いでいます）
-    const clientId = "a_PnXI27uqa2_jjA1";
+    // 👇 新しく教えてくれた正確なキーに修正しました！
+    const clientId = "a_PnXI27uqa2";
     const clientSecret = "vfBvy86+rpiEQUfD3MkV01e4pZiVSLQt5xeglchak9s=";
     const merchantId = "885953454935506944";
 
