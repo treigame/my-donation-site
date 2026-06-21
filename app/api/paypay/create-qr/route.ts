@@ -1,29 +1,24 @@
 import { NextResponse } from 'next/server';
-import * as crypto from 'crypto';
+// 🔴 正しい公式SDKを読み込む
+import PAYPAY from '@paypayopa/paypayopa-sdk-node';
 
-interface PayPayResponse {
-  resultInfo?: {
-    code?: string;
-    message?: string;
-  };
-  data?: {
-    url?: string;
-  };
-}
+// れいさんが用意してくれた本物のキーとIDを設定（末尾の _jjA1 を含めた完全版）
+PAYPAY.Configure({
+  clientId: "a_PnXI27uqa2_jjA1",
+  clientSecret: "vfBvy86+rpiEQUfD3MkV01e4pZiVSLQt5xeglchak9s=",
+  merchantId: "885953454935506944",
+  productionMode: false, // falseなのでSandbox（テスト環境）に繋がります
+});
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const amount = body.amount;
 
-    // れいさんの本物のキーとID（そのまま引き継いでいます）
-    // 👇 新しく教えてくれた正確なキーに修正しました！
-    const clientId = "a_PnXI27uqa2";
-    const clientSecret = "vfBvy86+rpiEQUfD3MkV01e4pZiVSLQt5xeglchak9s=";
-    const merchantId = "885953454935506944";
-
+    // 1. ユニークな決済IDを自動生成する
     const merchantPaymentId = `donation_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
+    // 2. PayPayの公式ルールに合わせてデータを作る
     const payload = {
       merchantPaymentId: merchantPaymentId,
       amount: {
@@ -35,51 +30,30 @@ export async function POST(request: Request) {
       isAuthorization: false,
     };
 
-    // Vercelをフリーズさせないために、自前で安全に署名を計算する
-    const epoch = Math.floor(Date.now() / 1000).toString();
-    const nonce = crypto.randomBytes(8).toString('hex');
-    const requestBody = JSON.stringify(payload);
-    const contentType = 'application/json';
-    const requestUrl = '/v2/codes';
-
-    const signatureRawList = [
-      requestUrl,
-      'POST',
-      nonce,
-      epoch,
-      contentType,
-      requestBody
-    ];
-    const signatureRaw = signatureRawList.join('\n');
-    const hmac = crypto.createHmac('sha256', clientSecret);
-    const signature = hmac.update(signatureRaw).digest('base64');
-
-    const authHeader = `hmac userName="${clientId}", password="${signature}", nonce="${nonce}", epoch="${epoch}", isProfile="false"`;
-
-    // SDKを挟まず、Next.js標準のfetchで直接PayPayテストサーバーへ叩く
-    const paypayRes = await fetch('https://stg-api.paypay.ne.jp/v2/codes', {
-      method: 'POST',
-      headers: {
-        'Content-Type': contentType,
-        'Authorization': authHeader,
-        'X-ASSUME-MERCHANT': merchantId,
-      },
-      body: requestBody,
+    // 3. 🔴 本物の公式SDKを使って、PayPayのテストサーバーへリクエストを送る！
+    const response: any = await new Promise((resolve) => {
+      PAYPAY.QRCodeCreate(payload, (res: any) => {
+        resolve(res);
+      });
     });
 
-    const responseData = (await paypayRes.json()) as PayPayResponse;
+    console.log("PayPayからの生データ:", response);
 
-    if (responseData.resultInfo?.code === 'SUCCESS' && responseData.data?.url) {
+    // 4. PayPayから無事にQRコードのURLが返ってきた場合の処理 (ステータス201が成功)
+    // フロントの挙動（data.success === true）と完全に一致させます
+    if (response.STATUS === 201 && response.BODY?.data?.url) {
       return NextResponse.json({
         success: true,
         merchantPaymentId: merchantPaymentId,
-        qrUrl: responseData.data.url, // フロント側（page.tsx）が受け取る変数名
+        qrUrl: response.BODY.data.url, // 👈 これがフロントの activePayPayTx.qrUrl に渡ります！
         amount: amount,
       });
     } else {
-      return NextResponse.json({
-        success: false,
-        error: responseData.resultInfo?.message || "QRコード生成に失敗しました"
+      // 弾かれた場合、PayPayからエラー理由（message や CODE）をフロントに返す
+      const errorMessage = response.BODY?.resultInfo?.message || response.BODY?.resultInfo?.code || "QRコードの生成に失敗しました";
+      return NextResponse.json({ 
+        success: false, 
+        error: errorMessage
       });
     }
 
